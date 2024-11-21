@@ -12,12 +12,13 @@ def cross_validate_model(
     num_users,
     num_books,
     num_authors,
-    num_categories,
+    cat_dim,
     num_publishers,
+    num_langs,
     num_folds=5,
     num_epochs=15,
     batch_size=32,
-    learning_rate=0.001,
+    learning_rate=0.0001,
     device="cuda" if torch.cuda.is_available() else "cpu",
 ):
     kfold = KFold(n_splits=num_folds, shuffle=True, random_state=42)
@@ -36,7 +37,8 @@ def cross_validate_model(
             num_users=num_users,
             num_books=num_books,
             num_authors=num_authors,
-            num_categories=num_categories,
+            cat_dim=cat_dim,
+            num_langs=num_langs,
             num_publishers=num_publishers,
         ).to(device)
 
@@ -56,30 +58,28 @@ def cross_validate_model(
             for batch in train_loader:
                 user_id = batch["user_id"].to(device)
                 book_id = batch["book_id"].to(device)
-                author_label = batch["author_label"].to(device)
-                category_label = batch["category_label"].to(device)
-                publisher_label = batch["publisher"].to(device)
+                authors = batch["authors"].to(device)
+                categories = batch["categories"].to(device)
+                publisher = batch["publisher"].to(device)
                 page_count = batch["pageCount"].to(device)
-                average_rating = batch["averageRating"].to(device)
-                ratings_count = batch["ratingsCount"].to(device)
                 full_text_embeddings = batch["full_text_embeddings"].to(device)
                 published_year = batch["publishedYear"].to(device)
-
                 rating = batch["rating"].to(device)
-
+                language = batch["language"].to(device)
+                maturity_rating = batch["maturityRating"].to(device)
                 optimizer.zero_grad()
 
                 outputs = model(
                     user_id=user_id,
                     book_id=book_id,
-                    author_label=author_label,
-                    category_label=category_label,
-                    publisher_label=publisher_label,
+                    authors=authors,
+                    categories=categories,
+                    publisher=publisher,
                     page_count=page_count,
-                    average_rating=average_rating,
-                    ratings_count=ratings_count,
                     published_year=published_year,
                     full_text_embeddings=full_text_embeddings,
+                    language=language,
+                    maturity_rating=maturity_rating,
                 )
 
                 loss = criterion(outputs, rating)
@@ -99,27 +99,27 @@ def cross_validate_model(
                 for batch in val_loader:
                     user_id = batch["user_id"].to(device)
                     book_id = batch["book_id"].to(device)
-                    author_label = batch["author_label"].to(device)
-                    category_label = batch["category_label"].to(device)
-                    publisher_label = batch["publisher"].to(device)
+                    authors = batch["authors"].to(device)
+                    categories = batch["categories"].to(device)
+                    publisher = batch["publisher"].to(device)
                     page_count = batch["pageCount"].to(device)
-                    average_rating = batch["averageRating"].to(device)
-                    ratings_count = batch["ratingsCount"].to(device)
                     full_text_embeddings = batch["full_text_embeddings"].to(device)
                     published_year = batch["publishedYear"].to(device)
                     rating = batch["rating"].to(device)
+                    language = batch["language"].to(device)
+                    maturity_rating = batch["maturityRating"].to(device)
 
                     outputs = model(
                         user_id=user_id,
                         book_id=book_id,
-                        author_label=author_label,
-                        category_label=category_label,
-                        publisher_label=publisher_label,
+                        authors=authors,
+                        categories=categories,
+                        publisher=publisher,
                         page_count=page_count,
-                        average_rating=average_rating,
-                        ratings_count=ratings_count,
                         published_year=published_year,
                         full_text_embeddings=full_text_embeddings,
+                        language=language,
+                        maturity_rating=maturity_rating,
                     )
 
                     loss = criterion(outputs, rating)

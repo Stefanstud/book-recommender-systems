@@ -2,13 +2,15 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import string
+import numpy as np
 
 # from sklearn.impute import KNNImputer
 from collections import Counter
 import ast
 from nltk.stem import PorterStemmer
 import nltk
-from sklearn.preprocessing import LabelEncoder  # , MultiLabelBinarizer
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, MultiLabelBinarizer
+from sentence_transformers import SentenceTransformer
 
 nltk.download("punkt")
 
@@ -17,43 +19,22 @@ class BooksDataset(Dataset):
     def __init__(self, dataset):
         self.books = dataset.copy()
         # self.books = self.books.drop(columns=["textSnippet"])
-
         # self.imputer = KNNImputer(n_neighbors=5)
         self.stemmer = PorterStemmer()
+        self.category_model = SentenceTransformer("thenlper/gte-small")
         self._preprocess()
 
     def _preprocess(self):
-        # create masks for missing data
-        self.books["pageCount_missing"] = self.books["pageCount"].isnull().astype(int)
-        self.books["description_missing"] = (
-            self.books["description"].isnull().astype(int)
-        )
-        self.books["categories_missing"] = self.books["categories"].isnull().astype(int)
-        self.books["averageRating_missing"] = (
-            self.books["averageRating"].isnull().astype(int)
-        )
-        self.books["ratingsCount_missing"] = (
-            self.books["ratingsCount"].isnull().astype(int)
-        )
-        self.books["publisher_missing"] = self.books["publisher"].isnull().astype(int)
-
         # Handle missing numerical values
         # fill with median
         self.books["pageCount"] = self.books["pageCount"].fillna(
             self.books["pageCount"].median()
         )
-        self.books["averageRating"] = self.books["averageRating"].fillna(
-            self.books["averageRating"].median()
-        )
-        self.books["ratingsCount"] = self.books["ratingsCount"].fillna(
-            self.books["ratingsCount"].median()
-        )
-
         print("Numerical columns imputed")
 
         self.books["full_text_embeddings"] = self.books["full_text_embeddings"].apply(
             eval
-        )
+        )  # TODO: change how we save it so its not a string
         self.books = self.books.drop(
             columns=["title", "subtitle", "description", "full_text"]
         )
@@ -74,15 +55,20 @@ class BooksDataset(Dataset):
         # Fill missing categorical values
         # fill missing publisher with "Unknown" and convert to numerical
         self.books["publisher"] = self.books["publisher"].fillna("Unknown")
-        pub_enc = LabelEncoder()
-        self.books["publisher"] = pub_enc.fit_transform(self.books["publisher"])
+        self.books["publisher"] = self.books["publisher"].str.split(",")
+
+        publisher_enc = MultiLabelBinarizer()
+        pub_encoded = publisher_enc.fit_transform(self.books["publisher"].values)
+        self.books["publisher"] = pub_encoded.tolist()
 
         # fill missing maturityRating with most frequent value and convert to numerical
         self.books["maturityRating"] = self.books["maturityRating"].fillna(
             self.books["maturityRating"].mode().values[0]
         )
-        self.books["maturityRating"] = (
-            self.books["maturityRating"].astype("category").cat.codes
+
+        # 0 for "NOT_MATURE" and 1 for "MATURE"
+        self.books["maturityRating"] = self.books["maturityRating"].apply(
+            lambda x: 0 if x == "NOT_MATURE" else 1
         )
 
         # fill missing language with most frequent value and convert to numerical
@@ -93,94 +79,44 @@ class BooksDataset(Dataset):
         self.books["language"] = lang_enc.fit_transform(self.books["language"])
 
         # Handle authors: Keep only the first author
-        self.books["authors"] = (
-            self.books["authors"].fillna("[]").apply(self._get_first_author)
-        )
-        self.author_vocab = self._build_author_vocab(self.books["authors"])
-        self.books["author_label"] = self.books["authors"].apply(
-            lambda authors: self.author_vocab.get(
-                authors[0], self.author_vocab["<unk>"]
-            )
-        )
+        # input missing authors with "Unknown"
+        self.books["authors"] = self.books["authors"].fillna("Unknown")
+        self.books["authors"] = self.books["authors"].str.split(",")
+
+        authors_enc = MultiLabelBinarizer()
+        authors_encoded = authors_enc.fit_transform(self.books["authors"].values)
+        self.books["authors"] = authors_encoded.tolist()
 
         # Handle categories: Remove punctuation, split, and stem
-        self.books["categories"] = (
-            self.books["categories"].fillna("[]").apply(self._preprocess_categories)
+        self.books["categories"] = self.books["categories"].fillna("Unknown")
+        # split by ,
+        self.books["categories"] = self.books["categories"].apply(
+            lambda x: x.split(",")
         )
         self.category_vocab = self._build_category_vocab(self.books["categories"])
-        self.max_categories_len = self.books["categories"].apply(len).max()
-        self.books["category_label"] = self.books["categories"].apply(
-            lambda categories: self._encode_and_pad_categories(
-                categories, self.max_categories_len
-            )
+        # get the mapping of each category do the emb dim and average if there are multiple categories
+        self.books["categories"] = self.books["categories"].apply(
+            lambda x: torch.tensor([self.category_vocab[cat] for cat in x]).mean(dim=0)
         )
 
         # standardize all features
         self.books["pageCount"] = (
             self.books["pageCount"] - self.books["pageCount"].mean()
         ) / self.books["pageCount"].std()
-        self.books["averageRating"] = (
-            self.books["averageRating"] - self.books["averageRating"].mean()
-        ) / self.books["averageRating"].std()
-        self.books["ratingsCount"] = (
-            self.books["ratingsCount"] - self.books["ratingsCount"].mean()
-        ) / self.books["ratingsCount"].std()
         self.books["publishedYear"] = (
             self.books["publishedYear"] - self.books["publishedYear"].mean()
         ) / self.books["publishedYear"].std()
 
-    def _get_first_author(self, x):
-        if isinstance(x, str):
-            x = [x]
-        elif isinstance(x, list) and len(x) > 0:
-            x = [x[0]]
-        else:
-            x = ["<pad>"]
-        return x
-
-    def _build_author_vocab(self, authors_list):
-        all_authors = [
-            author for authors in authors_list for author in authors if author
-        ]
-        author_counter = Counter(all_authors)
-        author_vocab = {"<pad>": 0, "<unk>": 1}
-        for index, author in enumerate(author_counter.keys(), start=2):
-            author_vocab[author] = index
-        return author_vocab
-
-    def _preprocess_categories(self, category_list):
-        if isinstance(category_list, str):
-            try:
-                category_list = ast.literal_eval(category_list)
-            except (ValueError, SyntaxError):
-                category_list = [category_list]
-        processed_categories = []
-        for category in category_list:
-            category = category.translate(str.maketrans("", "", string.punctuation))
-            words = category.split()
-            stemmed_words = [self.stemmer.stem(word.lower()) for word in words]
-            processed_categories.extend(stemmed_words)
-        return processed_categories
-
     def _build_category_vocab(self, categories_list):
-        all_categories = [word for categories in categories_list for word in categories]
-        category_counter = Counter(all_categories)
-        category_vocab = {"<pad>": 0, "<unk>": 1}
-        for index, word in enumerate(category_counter.keys(), start=2):
-            category_vocab[word] = index
-        return category_vocab
-
-    def _encode_and_pad_categories(self, categories, max_len):
-        pad_index = self.category_vocab["<pad>"]
-        encoded_categories = [
-            self.category_vocab.get(word, self.category_vocab["<unk>"])
-            for word in categories
+        all_categories = [
+            category for categories in categories_list for category in categories
         ]
-        if len(encoded_categories) < max_len:
-            encoded_categories += [pad_index] * (max_len - len(encoded_categories))
-        else:
-            encoded_categories = encoded_categories[:max_len]
-        return encoded_categories
+        set_categories = set(all_categories)
+        vocab = {}
+        for index, category in enumerate(set_categories):
+            vocab[category] = self.category_model.encode(category)
+
+        return vocab
 
     def __len__(self):
         return len(self.books)
@@ -191,35 +127,23 @@ class BooksDataset(Dataset):
             "user_id": torch.tensor(row["user_id"], dtype=torch.long),
             "book_id": torch.tensor(row["book_id"], dtype=torch.long),
             "pageCount": torch.tensor(row["pageCount"], dtype=torch.float32),
-            "averageRating": torch.tensor(row["averageRating"], dtype=torch.float32),
-            "ratingsCount": torch.tensor(row["ratingsCount"], dtype=torch.float32),
-            "author_label": torch.tensor(row["author_label"], dtype=torch.long),
-            "category_label": torch.tensor(row["category_label"], dtype=torch.long),
+            "authors": torch.tensor(
+                row["authors"], dtype=torch.float32
+            ),  # k project to smaller dim
+            "categories": torch.tensor(
+                row["categories"], dtype=torch.float32
+            ),  # emb - project to smaller dim
             "publishedYear": torch.tensor(row["publishedYear"], dtype=torch.float32),
-            "publisher": torch.tensor(row["publisher"], dtype=torch.long),
-            "maturityRating": torch.tensor(row["maturityRating"], dtype=torch.long),
-            "language": torch.tensor(row["language"], dtype=torch.long),
-            "publisher_missing": torch.tensor(
-                row["publisher_missing"], dtype=torch.bool
-            ),
-            "pageCount_missing": torch.tensor(
-                row["pageCount_missing"], dtype=torch.bool
-            ),
-            "description_missing": torch.tensor(
-                row["description_missing"], dtype=torch.bool
-            ),
-            "categories_missing": torch.tensor(
-                row["categories_missing"], dtype=torch.bool
-            ),
-            "averageRating_missing": torch.tensor(
-                row["averageRating_missing"], dtype=torch.bool
-            ),
-            "ratingsCount_missing": torch.tensor(
-                row["ratingsCount_missing"], dtype=torch.bool
-            ),
+            "publisher": torch.tensor(
+                row["publisher"], dtype=torch.float32
+            ),  # k - multiple publishers per book - project to smaller dim
+            "maturityRating": torch.tensor(
+                row["maturityRating"], dtype=torch.long
+            ),  # b - embed with not big dimensionality
+            "language": torch.tensor(row["language"], dtype=torch.long),  # c embed
             "full_text_embeddings": torch.tensor(
                 row["full_text_embeddings"], dtype=torch.float32
-            ),
+            ),  # dont do anything
             "rating": torch.tensor(row["rating"], dtype=torch.float32),
         }
         return features

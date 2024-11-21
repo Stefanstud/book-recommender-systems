@@ -22,19 +22,21 @@ def main():
     # Calculate the number of unique values needed for the model
     num_users = books_dataset.books["user_id"].max() + 1
     num_books = books_dataset.books["book_id"].max() + 1
-    num_authors = books_dataset.books["author_label"].max() + 1
-    num_categories = books_dataset.books["category_label"].apply(max).max() + 1
-    num_publishers = books_dataset.books["publisher"].max() + 1
+    num_authors = len(books_dataset.books["authors"][0])
+    num_publishers = len(books_dataset.books["publisher"][0])
+    num_langs = books_dataset.books["language"].max() + 1
+    cat_dim = 384
 
     # Fwross-validation on the model
     avg_loss = cross_validate_model(
-        model_class=WideAndDeepModel,
+        model_class=RecommenderModel,
         dataset=books_dataset,
         num_authors=num_authors,
-        num_books=num_books,
-        num_categories=num_categories,
-        num_publishers=num_publishers,
         num_users=num_users,
+        num_books=num_books,
+        cat_dim=cat_dim,
+        num_publishers=num_publishers,
+        num_langs=num_langs,
     )
     print(f"Average RMSE from Cross-Validation: {avg_loss}")
 
