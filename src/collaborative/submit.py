@@ -3,11 +3,9 @@ import pickle
 from trainer import Trainer
 from model import CollaborativeFilteringModel
 
-# Load the test and train data
 test_df = pd.read_csv("../../data/test.csv")
 train_df = pd.read_csv("../../data/train.csv")
 
-# Load the saved mappings from training
 with open("user_to_index.pkl", "rb") as f:
     user_to_index = pickle.load(f)
 with open("book_to_index.pkl", "rb") as f:
@@ -20,7 +18,6 @@ test_df["book_id"] = (
     test_df["book_id"].map(book_to_index).fillna(len(book_to_index)).astype(int)
 )
 
-# Get the number of unique users and books from the training data
 num_users = train_df["user_id"].nunique()
 num_books = train_df["book_id"].nunique()
 

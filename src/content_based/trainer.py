@@ -39,7 +39,7 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():
             predictions = self.model(book_features)
-            return predictions.squeeze().tolist()  # Return as a list of predictions
+            return predictions.squeeze().tolist()  
 
     def predict(self, book_features, author_features, category_features, page_count):
         self.model.eval()
@@ -47,7 +47,7 @@ class Trainer:
             predictions = self.model(
                 book_features, author_features, category_features, page_count
             )
-            return predictions.squeeze().tolist()  # Return as a list of predictions
+            return predictions.squeeze().tolist()  
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)

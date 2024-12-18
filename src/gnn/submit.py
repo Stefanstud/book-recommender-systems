@@ -6,19 +6,14 @@ from sklearn.preprocessing import LabelEncoder
 from graph_model import GraphRecommendationModel
 from load_data import load_data
 
-# Load data and mappings
 data, num_users, num_books, feature_dim, user_id_map, book_id_map = load_data()
-
-# Load test data
 test_file_path = "../../data/test.csv"
 test_df = pd.read_csv(test_file_path)
 
-# Map user_ids and book_ids using the mappings from training
 test_df["user_id_mapped"] = test_df["user_id"].map(user_id_map)
 test_df["book_id_mapped"] = test_df["book_id"].map(book_id_map)
 test_df["book_id_mapped"] += num_users  # Adjust book IDs
 
-# Handle unmapped users and books
 unmapped_users = test_df["user_id_mapped"].isnull()
 unmapped_books = test_df["book_id_mapped"].isnull()
 
@@ -49,26 +44,19 @@ if unmapped_books.any():
     num_new_books = len(new_book_ids)
     num_books += num_new_books
 
-# Update num_nodes
 num_nodes = num_users + num_books
-
-# Prepare node features
 feature_dim = data.x.size(1)
 x = torch.zeros((num_nodes, feature_dim), dtype=torch.float32)
-x[: data.x.size(0)] = data.x  # Copy existing node features
+x[: data.x.size(0)] = data.x  
 
-# Process features for new books
 if unmapped_books.any():
-    # Load books data again
     books_file_path = "../../data/extended_books_google_embeddings.csv"
     books_data = pd.read_csv(books_file_path)
 
-    # Get features for new books
     new_books_data = books_data[books_data["book_id"].isin(new_book_ids)].copy()
     new_books_data["book_id_mapped"] = new_books_data["book_id"].map(book_id_map)
     new_books_data.sort_values("book_id_mapped", inplace=True)
 
-    # Process features as before
     page_count = torch.tensor(
         new_books_data["pageCount"].fillna(0).values, dtype=torch.float32
     )
@@ -92,7 +80,6 @@ if unmapped_books.any():
         published_date.dt.year.fillna(0).values, dtype=torch.float32
     )
 
-    # Combine features
     new_book_features = torch.stack(
         [
             page_count,
@@ -105,38 +92,30 @@ if unmapped_books.any():
         dim=1,
     )
 
-    # Assign new book features
     new_book_indices = new_books_data["book_id_mapped"].values
     x[new_book_indices] = new_book_features
 
-# Prepare edge index
 edge_index = torch.tensor(
     test_df[["user_id_mapped", "book_id_mapped"]].values.T, dtype=torch.long
 )
 
-# Load model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-embedding_dim = 32  # Use the same embedding_dim as during training
+embedding_dim = 32  
 model = GraphRecommendationModel(num_users, num_books, feature_dim, embedding_dim)
 model.load_state_dict(torch.load("graph_model.pth", map_location=device))
 model.to(device)
 model.eval()
 
-# Prepare src_nodes and dst_nodes
 src_nodes = torch.tensor(test_df["user_id_mapped"].values, dtype=torch.long)
 dst_nodes = torch.tensor(test_df["book_id_mapped"].values, dtype=torch.long)
 
-# Move data to device
 x = x.to(device)
 edge_index = edge_index.to(device)
 src_nodes = src_nodes.to(device)
 dst_nodes = dst_nodes.to(device)
 
-# Create DataLoader
 test_dataset = TensorDataset(src_nodes, dst_nodes)
 test_loader = DataLoader(test_dataset, batch_size=1024, shuffle=False)
-
-# Make predictions
 all_predictions = []
 
 with torch.no_grad():
@@ -148,11 +127,7 @@ with torch.no_grad():
         all_predictions.append(predictions.cpu())
 
 all_predictions = torch.cat(all_predictions).numpy()
-
-# Clip predictions to valid range
 all_predictions = np.clip(all_predictions, 1, 5)
-
-# Prepare submission
 test_df["rating"] = all_predictions
 submission = test_df[["id", "rating"]]
 submission.to_csv("submission.csv", index=False)

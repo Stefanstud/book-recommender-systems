@@ -24,19 +24,18 @@ def load_data():
     books_df = pd.read_csv("../../data/extended_books_google_embeddings.csv")
     train_df = pd.read_csv("../../data/train.csv")
 
-    # Process embeddings
     books_df["full_text_embeddings"] = books_df["full_text_embeddings"].apply(
         ast.literal_eval
     )
 
-    # Process authors: Take the first author only
+    # take the first author only
     books_df["authors"] = books_df["authors"].apply(
         lambda x: x.split(",")[0] if pd.notna(x) else "Unknown"
     )
     author_encoder = LabelEncoder()
     books_df["author_id"] = author_encoder.fit_transform(books_df["authors"])
 
-    # Process categories: Preprocess, encode, and pad
+    # preprocess, encode, and pad
     books_df["categories"] = books_df["categories"].fillna("").apply(preprocess_text)
     all_categories = {cat for sublist in books_df["categories"] for cat in sublist}
     category_to_id = {cat: idx + 1 for idx, cat in enumerate(all_categories)}
@@ -68,13 +67,11 @@ def load_data():
     page_count_features = torch.tensor(merged_df["pageCount"].values, dtype=torch.float)
     ratings = torch.tensor(merged_df["rating"].values, dtype=torch.float)
 
-    # Create a DataLoader
     dataset = TensorDataset(
         book_features, author_features, category_features, page_count_features, ratings
     )
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    # Define input dimensions
     input_dims = {
         "embedding_dim": book_features.shape[1],  # 768 for text embeddings
         "author_dim": len(author_encoder.classes_),  # Number of unique authors

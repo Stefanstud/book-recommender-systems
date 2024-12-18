@@ -14,32 +14,28 @@ class ContentBasedModel(nn.Module):
         self.output_fc = nn.Linear(embedding_dim * 4, 1)
 
     def forward(self, text_features, author_id, category_ids, page_count):
-        # Process text features
         text_out = self.relu(
             self.text_fc(text_features)
-        )  # Shape: [batch_size, embedding_dim]
+        ) 
 
-        # Process author features
         author_out = self.author_embedding(
             author_id
-        )  # Shape: [batch_size, embedding_dim]
+        ) 
 
-        # Process category features
         category_embeds = self.category_embedding(
             category_ids
-        )  # Shape: [batch_size, 10, embedding_dim]
+        ) 
         category_out = self.relu(
             self.category_fc(category_embeds.view(category_embeds.size(0), -1))
-        )  # Flatten and project
+        ) 
 
-        # Process page count feature
         page_count_out = self.relu(
             self.page_count_fc(page_count.unsqueeze(1))
-        )  # Shape: [batch_size, embedding_dim]
+        )
 
         combined_features = torch.cat(
             [text_out, author_out, category_out, page_count_out], dim=1
         )
 
-        output = self.output_fc(combined_features).squeeze(1)  # Shape: [batch_size]
+        output = self.output_fc(combined_features).squeeze(1) 
         return output
