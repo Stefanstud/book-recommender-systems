@@ -24,7 +24,7 @@ The `notebooks/` folder contains notebooks for data preprocessing, and model exp
 3. **`fix_isbn.ipynb`**: Cleans and fixes the dataset, producing `books_fixed.csv`.
 4. **`item_collaborative.ipynb`**: Implements item-based collaborative filtering.
 5. **`user_collaborative.ipynb`**: Implements user-based collaborative filtering.
-**6.** **`matrix_factorization_best_approach.ipynb`**: Implements the final matrix factorization model with enhancements. This is the best model. 
+6. **`matrix_factorization_best_approach.ipynb`**: Implements the final matrix factorization model with enhancements. **This is the best model.** 
 
 ---
 
