@@ -24,7 +24,7 @@ The `notebooks/` folder contains notebooks for data preprocessing, and model exp
 3. **`fix_isbn.ipynb`**: Cleans and fixes the dataset, producing `books_fixed.csv`.
 4. **`item_collaborative.ipynb`**: Implements item-based collaborative filtering.
 5. **`user_collaborative.ipynb`**: Implements user-based collaborative filtering.
-6. **`matrix_factorization_best_approach.ipynb`**: Implements the final matrix factorization model with enhancements. This is the best model. 
+**6.** **`matrix_factorization_best_approach.ipynb`**: Implements the final matrix factorization model with enhancements. This is the best model. 
 
 ---
 
@@ -35,7 +35,7 @@ The `src/` folder contains modular implementations for various methods:
 - **`gnn/`**: Experiments with graph neural networks.
 - **`other/`**: Additional exploratory scripts.
 
-Note: While these methods were part of our experimentation, they did not contribute to the final model used for predictions. They are included to provide insight into the approaches we explored during the project.
+*Note*: While these methods were part of our experimentation, they did not contribute to the final model used for predictions. They are included to provide insight into the approaches we explored during the project.
 
 ---
 
