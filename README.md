@@ -2,6 +2,9 @@
 
 This repository contains the following components:
 
+### Root
+- `model.pt` and `submission.csv` in the root of the project are the best model's weights and predictions.
+
 ### Data
 The `data/` folder includes the datasets and embeddings used in the project:
 - **`train.csv`**: Training dataset provided.
